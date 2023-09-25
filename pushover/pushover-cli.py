@@ -1,0 +1,259 @@
+import getopt
+import sys
+import os
+import configparser
+import http.client as http
+from urllib.parse import urlencode
+import re
+from pathlib import Path
+
+
+class Pushover:
+    PRIORITY_HIGHEST = 2
+    
+    PRIORITY_HIGH = 1
+    
+    PRIORITY_NORMAL = 0
+
+    PRIORITY_LOW = -1
+    
+    PRIORITY_LOWEST = -2
+
+    priorities = {"highest": PRIORITY_HIGHEST, "high": PRIORITY_HIGH, "normal": PRIORITY_NORMAL, "low": PRIORITY_LOW, "lowest": PRIORITY_LOWEST}
+
+    VERSION = "1.2.0"
+
+    verbose = False
+
+    user = None
+    token = None
+    device = "all"
+    priority = PRIORITY_NORMAL
+    url = ""
+    message = ""
+    title = ""
+    configFile = "/etc/pushover-cli.conf"
+    quiet = False
+    sound = "pushover"
+
+    def printLn(self, message):
+        if self.quiet == False:
+            print(message)
+
+    def exit(self, code):
+        self.printLn("")
+        sys.exit(code)
+
+    def usage(self):
+        """
+        Print Usage Information
+
+        :return:
+        """
+        file = os.path.basename(__file__)
+        print("pushover-cli v" + self.VERSION + " - https://github.com/markus-perl/pushover-cli")
+        print("")
+        print("Usage:   " + file + " [options] <message> <title>")
+        print("Stdin:   " + file + " [options] - <title>")
+        print(
+            "Example: " + file + " -u ubLBe5u3zNXF9gBtX2zKkezSuPgu3v -t aK5BW3sjAqPsedH44VyQSbaQecoRen \"Hello World\"")
+        print("")
+        print("  -u --user     <user id>             Pushover User-ID")
+        print("  -t --token    <api token>           Pushover API-Token")
+        print("  -d --device   <device name>         Default: all")
+        print("  -p --priority <highest, high, normal, low, lowest>   Default: normal")
+        print("  -l --url      <url>                 Link the message to this URL")
+        print("  -s --sound    <notification sound>  Default: pushover - see https://pushover.net/api#sounds")
+        print("  -c --config   <path to file>        Default: " + self.configFile)
+        print("  -v --verbose                        Be verbose")
+        print("  -q --quiet                          Be quiet")
+
+    def validate(self):
+
+        if self.user == None:
+            self.printLn('No user set')
+            self.usage()
+            self.exit(1)
+
+        if self.token == None:
+            self.printLn('No token set')
+            self.usage()
+            self.exit(1)
+
+    def parseConfig(self):
+
+        if not os.path.isfile(self.configFile):
+            self.configFile = os.path.dirname(os.path.realpath(__file__)) + '/.pushover-cli.conf'
+
+        if not os.path.isfile(self.configFile):
+            self.configFile = str(Path.home()) + '/.pushover-cli.conf'
+
+        if os.path.isfile(self.configFile):
+            with open(self.configFile, 'r') as f:
+                ini_str = '[root]\n' + f.read()
+                config = configparser.ConfigParser()
+                config.read_string(ini_str)
+
+            if config.has_option("root", "user"):
+                self.user = config.get("root", "user")
+
+            if config.has_option("root", "token"):
+                self.token = config.get("root", "token")
+
+            if config.has_option("root", "device"):
+                self.device = config.get("root", "device")
+
+            if config.has_option("root", "url"):
+                self.url = config.get("root", "url")
+
+            if config.has_option("root", "priority"):
+                for name, priority in self.priorities.items():
+                    if name == config.get("root", "priority"):
+                        self.priority = priority
+            if config.has_option("root", "sound"):
+                self.sound = config.get("root", "sound")
+
+            if config.has_option("root", "verbose"):
+                if config.get("root", "verbose") in ("1", "On", "on"):
+                    self.verbose = True
+
+            if config.has_option("root", "quiet"):
+                if config.get("root", "quiet") in ("1", "On", "on"):
+                    self.quiet = True
+
+    def main(self):
+        """
+        Main Method
+
+        :return:
+        """
+
+        self.parseConfig()
+
+        try:
+            opts, args = getopt.getopt(sys.argv[1:], "hqvu:t:d:p:u:c:l:s:",
+                                       ["help", "user=", "token=", "device=", "priority=", "url=", "config=", "sound=", "verbose",
+                                        "quiet"])
+        except getopt.GetoptError as err:
+            print(str(err))
+            self.usage()
+            self.exit(2)
+
+        if len(args) > 0:
+            self.message = args.pop(0)
+
+            if len(args) > 0:
+                self.title = args.pop(0)
+
+            for o, a in opts:
+                if o in ("-h", "--help"):
+                    self.usage()
+                    self.exit(0)
+                elif o in ("-c", "--config"):
+                    self.configFile = a
+                    self.parseConfig()
+                elif o in ("-v", "--verbose"):
+                    self.verbose = True
+                elif o in ("-q", "--quiet"):
+                    self.quiet = True
+                elif o in ("-u", "--user"):
+                    self.user = a
+                elif o in ("-t", "--token"):
+                    self.token = a
+                elif o in ("-d", "--device"):
+                    self.device = a
+                elif o in ("-p", "--priority"):
+                    for name, priority in self.priorities.items():
+                        if name == a:
+                            self.priority = priority
+                elif o in ("-l", "--url"):
+                    self.url = a
+                elif o in ("-s", "--sound"):
+                    self.sound = a
+
+            self.validate()
+
+            if self.message == "-":
+
+                while True:
+                    try:
+                        line = sys.stdin.readline().strip()
+                        if len(line) > 0:
+                            self.message = line
+                            self.send()
+                    except KeyboardInterrupt:
+                        break
+                    if not line:
+                        break
+
+            else:
+
+                if self.send() == False:
+                    self.exit(2)
+                else:
+                    self.exit(0)
+        else:
+            self.usage()
+            self.exit(2)
+
+    def send(self):
+        """
+        Send the message
+
+        :return:
+        """
+        if self.verbose:
+            self.printLn("User: " + self.user)
+            self.printLn("Token: " + self.token)
+            self.printLn("Device: " + str(self.device))
+            self.printLn("Priority: " + str(self.priority))
+            self.printLn("Url: " + str(self.url))
+            self.printLn("Message: " + self.message)
+            self.printLn("Title: " + self.title)
+            self.printLn("Sound: " + self.sound)
+
+        proxy = os.environ.get("http_proxy", "")
+        proxyreg = re.search('^http.*//(.+?):([0-9]+)', proxy)
+        if proxyreg:
+            proxyhost = proxyreg.group(1)
+            proxyport = proxyreg.group(2)
+            if self.verbose:
+                self.printLn("Proxy: " + proxyhost + ":" + proxyport)
+            conn = http.HTTPSConnection(proxyhost, int(proxyport))
+            conn.set_tunnel("api.pushover.net:443")
+        else:
+            conn = http.HTTPSConnection("api.pushover.net:443")
+
+        post_pack = {
+            "token": self.token,
+            "user": self.user,
+            "title": self.title,
+            "message": self.message,
+            "priority": self.priority,
+            "url": self.url,
+            "sound": self.sound,
+        }
+
+        if self.device != 'all':
+            post_pack["device"] = self.device
+
+        conn.request(
+            "POST",
+            "/1/messages.json",
+            urlencode(post_pack),
+            {"Content-type": "application/x-www-form-urlencoded"}
+        )
+
+        response = conn.getresponse()
+
+        if response.status == 200:
+            self.printLn("Message \"" + self.message + "\" sent successfully")
+            return True
+        else:
+            self.printLn(response.reason)
+            return False
+
+
+if __name__ == "__main__":
+    pushover = Pushover()
+    pushover.main()
