@@ -22,7 +22,7 @@ upper_threshold = 400               # upper threshold that starts the monitoring
 msg_threshold = 350                 # temperature at which the message should be triggered 
 count = 3                           # number of messages to be sent
 bbox = (1684, 274, 1806, 305)       # define captured area in bounding box (x1, y1, x2, y2)
-logfile = "logging.txt"             # logfile for debug logs the recognized values as string
+logfile = "logging.txt"             # logfile for debug, logs the recognized values as string
 msg_title = "Ofentür Heißdruck"     # titel for pushover Message
 
 trigger_activate = False
