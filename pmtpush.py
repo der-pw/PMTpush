@@ -15,12 +15,13 @@ import numpy as np
 from PIL import ImageGrab
 import subprocess
 import argparse
+import datetime
 
 # user defines
-wait_in_sec = 300                   # interval the main task all n seconds
+wait_in_sec = 120                   # interval the main task all n seconds
 upper_threshold = 400               # upper threshold that starts the monitoring
 msg_threshold = 350                 # temperature at which the message should be triggered 
-count = 3                           # number of messages to be sent
+count = 5                           # number of messages to be sent
 bbox = (1684, 274, 1806, 305)       # define captured area in bounding box (x1, y1, x2, y2)
 logfile = "logging.txt"             # logfile for debug, logs the recognized values as string
 msg_title = "Ofentür Heißdruck"     # titel for pushover Message
@@ -79,6 +80,8 @@ def repeat_task():
     global trigger_activate
     global messages_sent
     global count
+    current_datetime = datetime.datetime.now()
+    formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H:%M")
 
     screenshot = ImageGrab.grab(bbox=bbox)
     image = np.array(screenshot)
@@ -96,13 +99,6 @@ def repeat_task():
     # use tesseract on the preprocessed image
     text = pytesseract.image_to_string(eroded_image, config=custom_config)
     text = text.strip() # strip leading and trailing spaces and line breaks
-    
-    if debug:
-        cv2.imwrite("debug.png", eroded_image) 
-        # output the string
-        debug_output("raw String: " + text)
-        with open(logfile, 'a') as file:
-            file.write(text + '\n')
     
     # simple check, if the string is valid before convert it to int
     if len(text) < 4:
@@ -123,6 +119,15 @@ def repeat_task():
         if count == 0:
             messages_sent = True
 
+
+    log_line = f"{formatted_datetime}, {value}, {text}"
+
+    if debug:
+        cv2.imwrite("debug.png", eroded_image) 
+        # output the string
+        debug_output("raw String: " + text)
+        with open(logfile, 'a') as file:
+            file.write(log_line + '\n')
 
 while True:
     repeat_task()
