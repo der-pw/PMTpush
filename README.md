@@ -10,6 +10,7 @@ I have found the training data for 7 segment digits at
 https://github.com/Shreeshrii/tessdata_ssd  
 The best results I got with ssd (best version) "-l ssd".
 
-To send the pushover message, I use pushover-cli. https://github.com/markus-perl/pushover-cli
+To send the pushover message, I use pushover-cli.  
+https://github.com/markus-perl/pushover-cli
 
 ![Screenshot](screenshot.jpg)
