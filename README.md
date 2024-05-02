@@ -1,6 +1,5 @@
 ## PMTpush
-PMTpush extracts a value from a digital display (like 7 segment) in Proteus MT and sends a Message via pushover
-if the message threshold is reached.
+PMTpush takes a screenshot in a selected area and extracts a value from a digital display (e.g. 7 segments) in Proteus MT and sends a message via pushover when the message threshold is reached.
 
 Tesseract is used for the OCR method.  
 Pre-compiled Windows binaries are available at the UB Mannheim  
